@@ -1,0 +1,23 @@
+# Go binary files
+server
+sso-be-linux
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Environment variables
+.env
+.env.local
+
+# IDE / System files
+.DS_Store
+.idea/
+.vscode/
+
+# Test coverage
+*.out
+
+# Uploaded / Temp files
+uploads/
