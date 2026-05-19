@@ -6,3 +6,10 @@ sso-be-linux
 *.dll
 *.so
 *.dylib
+
+# Environment configurations
+.env
+.env.local
+
+# OS files
+.DS_Store
