@@ -112,6 +112,7 @@ func main() {
 	user.POST("/update", authHandler.UpdateProfile)
 	user.GET("/sessions", authHandler.MySessions)
 	user.POST("/upload-avatar", authHandler.UploadAvatar)
+	user.POST("/change-password", authHandler.ChangePassword)
 
 	// Avatar — public endpoint (decrypt on the fly)
 	v1.GET("/avatar/:hash", authHandler.ServeAvatar)

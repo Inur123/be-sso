@@ -53,6 +53,7 @@ type AuthService interface {
 	GetProfile(userID uuid.UUID) (*domain.User, error)
 	UpdateProfile(userID uuid.UUID, name, image, gender, phone string) (*domain.User, error)
 	GetMySessions(userID uuid.UUID) ([]domain.UserSession, error)
+	ChangePassword(userID uuid.UUID, oldPassword, newPassword string) error
 }
 
 type authService struct {
@@ -349,3 +350,25 @@ func (s *authService) UpdateProfile(userID uuid.UUID, name, image, gender, phone
 func (s *authService) GetMySessions(userID uuid.UUID) ([]domain.UserSession, error) {
 	return s.sessionRepo.FindOAuthByUserID(userID)
 }
+
+func (s *authService) ChangePassword(userID uuid.UUID, oldPassword, newPassword string) error {
+	user, err := s.userRepo.FindByID(userID)
+	if err != nil {
+		return errors.New("user tidak ditemukan")
+	}
+
+	// Verifikasi password lama
+	if !utils.CheckPassword(oldPassword, user.Password) {
+		return errors.New("password lama salah")
+	}
+
+	// Hash password baru
+	hashedPassword, err := utils.HashPassword(newPassword)
+	if err != nil {
+		return errors.New("gagal memproses password baru")
+	}
+
+	user.Password = hashedPassword
+	return s.userRepo.Update(user)
+}
+

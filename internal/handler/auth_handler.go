@@ -335,3 +335,35 @@ func (h *AuthHandler) ServeAvatar(c echo.Context) error {
 	return c.Blob(200, ct, imageData)
 }
 
+// ChangePassword godoc
+// POST /v1/user/change-password
+func (h *AuthHandler) ChangePassword(c echo.Context) error {
+	claims, ok := c.Get(middleware.UserContextKey).(*utils.JWTClaims)
+	if !ok {
+		return utils.Unauthorized(c, "Unauthorized")
+	}
+
+	type changePwdReq struct {
+		OldPassword string `json:"old_password" validate:"required"`
+		NewPassword string `json:"new_password" validate:"required,min=8"`
+	}
+
+	var req changePwdReq
+	if err := c.Bind(&req); err != nil {
+		return utils.BadRequest(c, "Request tidak valid")
+	}
+	if err := c.Validate(&req); err != nil {
+		if he, ok := err.(*echo.HTTPError); ok {
+			return utils.BadRequest(c, he.Message.(string))
+		}
+		return utils.BadRequest(c, "Validasi gagal")
+	}
+
+	if err := h.authService.ChangePassword(claims.UserID, req.OldPassword, req.NewPassword); err != nil {
+		return utils.BadRequest(c, err.Error())
+	}
+
+	return utils.OK(c, "Password berhasil diubah", nil)
+}
+
+
