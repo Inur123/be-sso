@@ -54,6 +54,8 @@ type AuthService interface {
 	UpdateProfile(userID uuid.UUID, name, image, gender, phone string) (*domain.User, error)
 	GetMySessions(userID uuid.UUID) ([]domain.UserSession, error)
 	ChangePassword(userID uuid.UUID, oldPassword, newPassword string) error
+	ForgotPassword(email string) error
+	ResetPassword(token, password, confirmPassword string) error
 }
 
 type authService struct {
@@ -364,6 +366,62 @@ func (s *authService) ChangePassword(userID uuid.UUID, oldPassword, newPassword 
 
 	// Hash password baru
 	hashedPassword, err := utils.HashPassword(newPassword)
+	if err != nil {
+		return errors.New("gagal memproses password baru")
+	}
+
+	user.Password = hashedPassword
+	return s.userRepo.Update(user)
+}
+
+func (s *authService) ForgotPassword(email string) error {
+	email = strings.TrimSpace(strings.ToLower(email))
+	user, err := s.userRepo.FindByEmail(email)
+	if err != nil {
+		return errors.New("pengguna dengan email tersebut tidak ditemukan")
+	}
+
+	if !user.IsActive {
+		return errors.New("akun Anda dinonaktifkan")
+	}
+
+	token, err := utils.GeneratePasswordResetToken(user.Email)
+	if err != nil {
+		return errors.New("gagal memproses permintaan reset password")
+	}
+
+	// Kirim email reset password secara asynchronous
+	go func(name, emailAddr, tok string) {
+		_ = utils.SendResetPasswordEmail(name, emailAddr, tok)
+	}(user.Name, user.Email, token)
+
+	return nil
+}
+
+func (s *authService) ResetPassword(token, password, confirmPassword string) error {
+	if password != confirmPassword {
+		return errors.New("password baru dan konfirmasi password tidak cocok")
+	}
+
+	if len(password) < 8 {
+		return errors.New("password baru minimal 8 karakter")
+	}
+
+	email, err := utils.ParsePasswordResetToken(token)
+	if err != nil {
+		return err
+	}
+
+	user, err := s.userRepo.FindByEmail(email)
+	if err != nil {
+		return errors.New("pengguna tidak ditemukan")
+	}
+
+	if !user.IsActive {
+		return errors.New("akun Anda dinonaktifkan")
+	}
+
+	hashedPassword, err := utils.HashPassword(password)
 	if err != nil {
 		return errors.New("gagal memproses password baru")
 	}

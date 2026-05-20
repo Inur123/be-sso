@@ -73,3 +73,40 @@ func SendVerificationEmail(toName, toEmail, token string) error {
 
 	return SendEmail(toEmail, subject, body)
 }
+
+func SendResetPasswordEmail(toName, toEmail, token string) error {
+	cfg := config.Get()
+	resetURL := fmt.Sprintf("%s/reset-password?token=%s", cfg.AppURL, token)
+
+	subject := "Reset Password Akun SSO IPNU-IPPNU Magetan"
+	body := fmt.Sprintf(`
+		<div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e5e7eb; border-radius: 12px;">
+			<h2 style="color: #10b981; margin-bottom: 16px;">Halo, %s!</h2>
+			<p style="color: #374151; line-height: 1.5; margin-bottom: 24px;">
+				Anda menerima email ini karena ada permintaan untuk mengatur ulang password akun Anda di <strong>SSO IPNU-IPPNU Magetan</strong>. Silakan klik tombol di bawah ini untuk mereset password Anda:
+			</p>
+			<div style="text-align: center; margin-bottom: 24px;">
+				<a href="%s" style="background-color: #10b981; color: white; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block;">
+					Reset Password Saya
+				</a>
+			</div>
+			<p style="color: #ef4444; font-size: 13px; font-weight: bold; margin-bottom: 16px;">
+				Tautan ini hanya berlaku selama 15 menit demi keamanan akun Anda.
+			</p>
+			<p style="color: #6b7280; font-size: 14px; line-height: 1.5; margin-bottom: 16px;">
+				Jika tombol di atas tidak bekerja, Anda juga dapat membuka link berikut pada browser Anda:
+				<br/>
+				<a href="%s" style="color: #10b981;">%s</a>
+			</p>
+			<p style="color: #9ca3af; font-size: 13px; margin-top: 24px;">
+				Jika Anda tidak merasa mengajukan permintaan ini, abaikan email ini dan password Anda tidak akan berubah.
+			</p>
+			<hr style="border: 0; border-top: 1px solid #e5e7eb; margin: 24px 0;" />
+			<p style="color: #9ca3af; font-size: 12px; text-align: center;">
+				Email ini dikirim secara otomatis oleh sistem SSO IPNU-IPPNU Magetan. Tolong jangan membalas email ini.
+			</p>
+		</div>
+	`, toName, resetURL, resetURL, resetURL)
+
+	return SendEmail(toEmail, subject, body)
+}

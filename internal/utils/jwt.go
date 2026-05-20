@@ -109,3 +109,35 @@ func ParseEmailVerificationToken(tokenStr string) (string, error) {
 	}
 	return claims.Email, nil
 }
+
+func GeneratePasswordResetToken(email string) (string, error) {
+	cfg := config.Get()
+	claims := EmailClaims{
+		Email: email,
+		RegisteredClaims: jwt.RegisteredClaims{
+			Issuer:    "sso.pelajarnumagetan.or.id",
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(15 * time.Minute)), // Valid 15 menit
+			IssuedAt:  jwt.NewNumericDate(time.Now()),
+		},
+	}
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	return token.SignedString([]byte(cfg.JWTSecret))
+}
+
+func ParsePasswordResetToken(tokenStr string) (string, error) {
+	cfg := config.Get()
+	token, err := jwt.ParseWithClaims(tokenStr, &EmailClaims{}, func(token *jwt.Token) (interface{}, error) {
+		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, errors.New("unexpected signing method")
+		}
+		return []byte(cfg.JWTSecret), nil
+	})
+	if err != nil {
+		return "", err
+	}
+	claims, ok := token.Claims.(*EmailClaims)
+	if !ok || !token.Valid {
+		return "", errors.New("token reset password tidak valid atau kedaluwarsa")
+	}
+	return claims.Email, nil
+}

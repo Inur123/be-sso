@@ -366,4 +366,56 @@ func (h *AuthHandler) ChangePassword(c echo.Context) error {
 	return utils.OK(c, "Password berhasil diubah", nil)
 }
 
+// ForgotPassword godoc
+// POST /v1/auth/forgot-password
+func (h *AuthHandler) ForgotPassword(c echo.Context) error {
+	type forgotReq struct {
+		Email string `json:"email" validate:"required,email"`
+	}
+
+	var req forgotReq
+	if err := c.Bind(&req); err != nil {
+		return utils.BadRequest(c, "Request tidak valid")
+	}
+	if err := c.Validate(&req); err != nil {
+		if he, ok := err.(*echo.HTTPError); ok {
+			return utils.BadRequest(c, he.Message.(string))
+		}
+		return utils.BadRequest(c, "Validasi gagal")
+	}
+
+	if err := h.authService.ForgotPassword(req.Email); err != nil {
+		return utils.BadRequest(c, err.Error())
+	}
+
+	return utils.OK(c, "Email pemulihan kata sandi telah dikirim. Silakan periksa kotak masuk Anda.", nil)
+}
+
+// ResetPassword godoc
+// POST /v1/auth/reset-password
+func (h *AuthHandler) ResetPassword(c echo.Context) error {
+	type resetReq struct {
+		Token           string `json:"token" validate:"required"`
+		Password        string `json:"password" validate:"required,min=8"`
+		ConfirmPassword string `json:"confirm_password" validate:"required"`
+	}
+
+	var req resetReq
+	if err := c.Bind(&req); err != nil {
+		return utils.BadRequest(c, "Request tidak valid")
+	}
+	if err := c.Validate(&req); err != nil {
+		if he, ok := err.(*echo.HTTPError); ok {
+			return utils.BadRequest(c, he.Message.(string))
+		}
+		return utils.BadRequest(c, "Validasi gagal")
+	}
+
+	if err := h.authService.ResetPassword(req.Token, req.Password, req.ConfirmPassword); err != nil {
+		return utils.BadRequest(c, err.Error())
+	}
+
+	return utils.OK(c, "Password Anda berhasil diperbarui! Silakan login kembali.", nil)
+}
+
 

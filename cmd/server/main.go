@@ -105,6 +105,8 @@ func main() {
 	auth.POST("/login", authHandler.Login)
 	auth.POST("/logout", authHandler.Logout)
 	auth.POST("/refresh", authHandler.RefreshToken)
+	auth.POST("/forgot-password", authHandler.ForgotPassword)
+	auth.POST("/reset-password", authHandler.ResetPassword)
 
 	// User routes (protected)
 	user := v1.Group("/user", middleware.Auth())
