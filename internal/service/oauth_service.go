@@ -55,7 +55,7 @@ type RefreshRequest struct {
 
 type OAuthService interface {
 	// Step 1: validasi params, kembalikan info app untuk consent page
-	Authorize(req *AuthorizeRequest) (*AuthorizeInfo, error)
+	Authorize(userID uuid.UUID, req *AuthorizeRequest) (*AuthorizeInfo, error)
 	// Step 2: user setujui consent → generate auth code
 	Confirm(userID uuid.UUID, req *AuthorizeRequest) (string, error)
 	// Step 3: App tukar code → token
@@ -67,11 +67,12 @@ type OAuthService interface {
 }
 
 type oauthService struct {
-	appRepo      repository.AppRepository
-	authCodeRepo repository.AuthCodeRepository
-	sessionRepo  repository.SessionRepository
-	userRepo     repository.UserRepository
-	cfg          *config.Config
+	appRepo       repository.AppRepository
+	authCodeRepo  repository.AuthCodeRepository
+	sessionRepo   repository.SessionRepository
+	userRepo      repository.UserRepository
+	appAccessRepo repository.AppAccessRepository
+	cfg           *config.Config
 }
 
 func NewOAuthService(
@@ -79,18 +80,20 @@ func NewOAuthService(
 	authCodeRepo repository.AuthCodeRepository,
 	sessionRepo repository.SessionRepository,
 	userRepo repository.UserRepository,
+	appAccessRepo repository.AppAccessRepository,
 ) OAuthService {
 	return &oauthService{
-		appRepo:      appRepo,
-		authCodeRepo: authCodeRepo,
-		sessionRepo:  sessionRepo,
-		userRepo:     userRepo,
-		cfg:          config.Get(),
+		appRepo:       appRepo,
+		authCodeRepo:  authCodeRepo,
+		sessionRepo:   sessionRepo,
+		userRepo:      userRepo,
+		appAccessRepo: appAccessRepo,
+		cfg:           config.Get(),
 	}
 }
 
 // Authorize — validasi client_id & redirect_uri, return info app untuk consent
-func (s *oauthService) Authorize(req *AuthorizeRequest) (*AuthorizeInfo, error) {
+func (s *oauthService) Authorize(userID uuid.UUID, req *AuthorizeRequest) (*AuthorizeInfo, error) {
 	if req.ResponseType != "code" {
 		return nil, errors.New("response_type harus 'code'")
 	}
@@ -113,8 +116,19 @@ func (s *oauthService) Authorize(req *AuthorizeRequest) (*AuthorizeInfo, error) 
 		return nil, errors.New("redirect_uri tidak valid")
 	}
 
+	// Cek restricted app access
+	if app.IsRestricted {
+		hasAccess, err := s.appAccessRepo.CheckAccess(userID, app.ID)
+		if err != nil {
+			return nil, errors.New("gagal memverifikasi hak akses")
+		}
+		if !hasAccess {
+			return nil, errors.New("Akses Ditolak: Anda tidak diizinkan mengakses aplikasi ini")
+		}
+	}
+
 	return &AuthorizeInfo{
-		App:         &AppResponse{ID: app.ID, Name: app.Name, LogoURL: app.LogoURL, ClientID: app.ClientID},
+		App:         &AppResponse{ID: app.ID, Name: app.Name, LogoURL: app.LogoURL, ClientID: app.ClientID, IsRestricted: app.IsRestricted},
 		Scope:       req.Scope,
 		State:       req.State,
 		RedirectURI: req.RedirectURI,
@@ -134,6 +148,17 @@ func (s *oauthService) Confirm(userID uuid.UUID, req *AuthorizeRequest) (string,
 
 	if !slices.Contains(app.RedirectURIs, req.RedirectURI) {
 		return "", errors.New("redirect_uri tidak valid")
+	}
+
+	// Cek restricted app access
+	if app.IsRestricted {
+		hasAccess, err := s.appAccessRepo.CheckAccess(userID, app.ID)
+		if err != nil {
+			return "", errors.New("gagal memverifikasi hak akses")
+		}
+		if !hasAccess {
+			return "", errors.New("Akses Ditolak: Anda tidak diizinkan mengakses aplikasi ini")
+		}
 	}
 
 	// Generate random code

@@ -22,6 +22,11 @@ func NewOAuthHandler(oauthService service.OAuthService) *OAuthHandler {
 // Dipanggil FE saat user diarahkan dari App A ke halaman consent SSO
 // FE perlu kirim Bearer token user yang sedang login
 func (h *OAuthHandler) Authorize(c echo.Context) error {
+	claims, ok := c.Get(middleware.UserContextKey).(*utils.JWTClaims)
+	if !ok || claims == nil {
+		return utils.Unauthorized(c, "Silakan login terlebih dahulu")
+	}
+
 	req := &service.AuthorizeRequest{
 		ResponseType: c.QueryParam("response_type"),
 		ClientID:     c.QueryParam("client_id"),
@@ -30,7 +35,7 @@ func (h *OAuthHandler) Authorize(c echo.Context) error {
 		State:        c.QueryParam("state"),
 	}
 
-	info, err := h.oauthService.Authorize(req)
+	info, err := h.oauthService.Authorize(claims.UserID, req)
 	if err != nil {
 		return utils.BadRequest(c, err.Error())
 	}

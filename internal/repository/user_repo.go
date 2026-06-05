@@ -19,6 +19,7 @@ type UserRepository interface {
 	Update(user *domain.User) error
 	Delete(id uuid.UUID) error
 	FindAll(page, perPage int) ([]domain.User, int64, error)
+	FindAllActive() ([]domain.User, error)
 	UpdateRole(id uuid.UUID, role domain.UserRole) error
 }
 
@@ -137,6 +138,14 @@ func (r *userRepository) FindAll(page, perPage int) ([]domain.User, int64, error
 	}
 
 	return users, total, nil
+}
+
+func (r *userRepository) FindAllActive() ([]domain.User, error) {
+	var users []domain.User
+	if err := r.db.Where("is_active = ? AND is_verified = ?", true, true).Find(&users).Error; err != nil {
+		return nil, err
+	}
+	return users, nil
 }
 
 func (r *userRepository) UpdateRole(id uuid.UUID, role domain.UserRole) error {

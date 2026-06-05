@@ -34,6 +34,7 @@ func main() {
 		&domain.User{},
 		&domain.Application{},
 		&domain.UserSession{},
+		&domain.AppAccess{},
 	); err != nil {
 		log.Fatalf("Migration failed: %v", err)
 	}
@@ -45,12 +46,13 @@ func main() {
 	sessionRepo := repository.NewSessionRepository(db)
 	appRepo := repository.NewAppRepository(db)
 	authCodeRepo := repository.NewAuthCodeRepository(database.Redis)
+	appAccessRepo := repository.NewAppAccessRepository(db)
 
 	// Services
 	authService := service.NewAuthService(userRepo, sessionRepo)
 	userService := service.NewUserService(userRepo)
-	appService := service.NewAppService(appRepo)
-	oauthService := service.NewOAuthService(appRepo, authCodeRepo, sessionRepo, userRepo)
+	appService := service.NewAppService(appRepo, appAccessRepo, userRepo)
+	oauthService := service.NewOAuthService(appRepo, authCodeRepo, sessionRepo, userRepo, appAccessRepo)
 
 	// Handlers
 	authHandler := handler.NewAuthHandler(authService)
@@ -89,7 +91,7 @@ func main() {
 
 	// OAuth routes (sejajar nu.id — public, dipanggil oleh App A/B)
 	oauth := e.Group("/oauth")
-	oauth.GET("/authorize", oauthHandler.Authorize)
+	oauth.GET("/authorize", oauthHandler.Authorize, middleware.Auth())
 	oauth.POST("/authorize/confirm", oauthHandler.Confirm, middleware.Auth())
 	oauth.POST("/token", oauthHandler.Token)
 	oauth.POST("/refreshAccessToken", oauthHandler.RefreshAccessToken)
@@ -129,6 +131,9 @@ func main() {
 	apps.PUT("/:id/toggle-active", appHandler.ToggleActive)
 	apps.POST("/:id/regenerate", appHandler.RegenerateSecret)
 	apps.GET("/:id/info", appHandler.GetPublicInfo)
+	apps.GET("/:id/access", appHandler.GetAccessList)
+	apps.POST("/:id/access", appHandler.UpdateAccessList)
+	apps.GET("/:id/access/search", appHandler.SearchUserAccess)
 
 	// Admin routes — superadmin only (protected)
 	admin := v1.Group("/admin", middleware.Auth(), middleware.LoadUserRole(db), middleware.RequireRole(domain.RoleSuperAdmin))

@@ -25,6 +25,7 @@ type Application struct {
 	LogoURL      string         `gorm:"size:500" json:"logo_url"`
 	Status       AppStatus      `gorm:"size:20;default:pending" json:"status"`
 	IsActive     bool           `gorm:"default:true" json:"is_active"`
+	IsRestricted bool           `gorm:"default:false" json:"is_restricted"`
 	OwnerID      uuid.UUID      `gorm:"type:uuid;not null" json:"owner_id"`
 	Owner        *User          `gorm:"foreignKey:OwnerID" json:"owner,omitempty"`
 	CreatedAt    time.Time      `json:"created_at"`

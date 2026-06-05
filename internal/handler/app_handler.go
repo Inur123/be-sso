@@ -185,6 +185,81 @@ func (h *AppHandler) GetPublicInfo(c echo.Context) error {
 	return utils.OK(c, "Info aplikasi", app)
 }
 
+type UpdateAccessListRequest struct {
+	UserIDs []uuid.UUID `json:"user_ids"`
+}
+
+// GetAccessList — GET /v1/apps/:id/access
+func (h *AppHandler) GetAccessList(c echo.Context) error {
+	claims := getClaims(c)
+	if claims == nil {
+		return utils.Unauthorized(c, "Unauthorized")
+	}
+
+	id, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		return utils.BadRequest(c, "ID tidak valid")
+	}
+
+	accessList, err := h.appService.GetAppAccessList(id, claims.UserID)
+	if err != nil {
+		return utils.BadRequest(c, err.Error())
+	}
+
+	return utils.OK(c, "Daftar akses aplikasi", accessList)
+}
+
+// UpdateAccessList — POST /v1/apps/:id/access
+func (h *AppHandler) UpdateAccessList(c echo.Context) error {
+	claims := getClaims(c)
+	if claims == nil {
+		return utils.Unauthorized(c, "Unauthorized")
+	}
+
+	id, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		return utils.BadRequest(c, "ID tidak valid")
+	}
+
+	var req UpdateAccessListRequest
+	if err := c.Bind(&req); err != nil {
+		return utils.BadRequest(c, "Request tidak valid")
+	}
+
+	err = h.appService.UpdateAppAccessList(id, claims.UserID, req.UserIDs)
+	if err != nil {
+		return utils.BadRequest(c, err.Error())
+	}
+
+	return utils.OK(c, "Akses aplikasi berhasil diperbarui", nil)
+}
+
+// SearchUserAccess — GET /v1/apps/:id/access/search
+func (h *AppHandler) SearchUserAccess(c echo.Context) error {
+	claims := getClaims(c)
+	if claims == nil {
+		return utils.Unauthorized(c, "Unauthorized")
+	}
+
+	id, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		return utils.BadRequest(c, "ID tidak valid")
+	}
+
+	query := c.QueryParam("query")
+	if query == "" {
+		return utils.BadRequest(c, "Query pencarian wajib diisi")
+	}
+
+	userAccess, err := h.appService.SearchUserForAccess(id, claims.UserID, query)
+	if err != nil {
+		return utils.NotFound(c, err.Error())
+	}
+
+	return utils.OK(c, "User ditemukan", userAccess)
+}
+
+
 // ===== ADMIN HANDLERS =====
 
 // AdminGetAll — GET /v1/admin/apps

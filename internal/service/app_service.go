@@ -25,6 +25,7 @@ type UpdateAppRequest struct {
 	Description  string   `json:"description"`
 	RedirectURIs []string `json:"redirect_uris"`
 	LogoURL      string   `json:"logo_url"`
+	IsRestricted *bool    `json:"is_restricted"`
 }
 
 type AppResponse struct {
@@ -36,6 +37,7 @@ type AppResponse struct {
 	LogoURL      string           `json:"logo_url"`
 	Status       domain.AppStatus `json:"status"`
 	IsActive     bool             `json:"is_active"`
+	IsRestricted bool             `json:"is_restricted"`
 	OwnerID      uuid.UUID        `json:"owner_id"`
 	CreatedAt    time.Time        `json:"created_at"`
 }
@@ -43,6 +45,14 @@ type AppResponse struct {
 type AppCreatedResponse struct {
 	AppResponse
 	ClientSecret string `json:"client_secret"` // Hanya muncul saat create / regenerate
+}
+
+type UserAccessResponse struct {
+	UserID    uuid.UUID `json:"user_id"`
+	Name      string    `json:"name"`
+	Email     string    `json:"email"`
+	Image     string    `json:"image"`
+	HasAccess bool      `json:"has_access"`
 }
 
 type AppService interface {
@@ -54,6 +64,9 @@ type AppService interface {
 	RegenerateSecret(id uuid.UUID, ownerID uuid.UUID) (string, error)
 	Delete(id uuid.UUID, ownerID uuid.UUID) error
 	ToggleActive(id uuid.UUID, ownerID uuid.UUID) (*AppResponse, error)
+	GetAppAccessList(appID, requesterID uuid.UUID) ([]UserAccessResponse, error)
+	UpdateAppAccessList(appID, requesterID uuid.UUID, userIDs []uuid.UUID) error
+	SearchUserForAccess(appID, requesterID uuid.UUID, searchQuery string) (*UserAccessResponse, error)
 
 	// Admin
 	GetAll(page, perPage int, status string) ([]AppResponse, int64, error)
@@ -66,11 +79,21 @@ type AppService interface {
 }
 
 type appService struct {
-	appRepo repository.AppRepository
+	appRepo       repository.AppRepository
+	appAccessRepo repository.AppAccessRepository
+	userRepo      repository.UserRepository
 }
 
-func NewAppService(appRepo repository.AppRepository) AppService {
-	return &appService{appRepo: appRepo}
+func NewAppService(
+	appRepo repository.AppRepository,
+	appAccessRepo repository.AppAccessRepository,
+	userRepo repository.UserRepository,
+) AppService {
+	return &appService{
+		appRepo:       appRepo,
+		appAccessRepo: appAccessRepo,
+		userRepo:      userRepo,
+	}
 }
 
 func (s *appService) Create(ownerID uuid.UUID, req *CreateAppRequest) (*AppCreatedResponse, error) {
@@ -155,6 +178,9 @@ func (s *appService) Update(id uuid.UUID, ownerID uuid.UUID, req *UpdateAppReque
 	if req.LogoURL != "" {
 		app.LogoURL = req.LogoURL
 	}
+	if req.IsRestricted != nil {
+		app.IsRestricted = *req.IsRestricted
+	}
 
 	if err := s.appRepo.Update(app); err != nil {
 		return nil, errors.New("gagal update aplikasi")
@@ -162,6 +188,139 @@ func (s *appService) Update(id uuid.UUID, ownerID uuid.UUID, req *UpdateAppReque
 
 	resp := toAppResponse(app)
 	return &resp, nil
+}
+
+func (s *appService) GetAppAccessList(appID, requesterID uuid.UUID) ([]UserAccessResponse, error) {
+	app, err := s.appRepo.FindByID(appID)
+	if err != nil {
+		return nil, errors.New("aplikasi tidak ditemukan")
+	}
+
+	user, err := s.userRepo.FindByID(requesterID)
+	if err != nil {
+		return nil, errors.New("user tidak ditemukan")
+	}
+
+	if user.Role != domain.RoleSuperAdmin && app.OwnerID != requesterID {
+		return nil, errors.New("akses ditolak")
+	}
+
+	assignedUsers, err := s.appAccessRepo.GetAssignedUsers(appID)
+	if err != nil {
+		return nil, err
+	}
+
+	var usersToReturn []domain.User
+	if user.Role == domain.RoleSuperAdmin {
+		allActive, err := s.userRepo.FindAllActive()
+		if err != nil {
+			return nil, err
+		}
+		for _, u := range allActive {
+			if u.Role != domain.RoleSuperAdmin {
+				usersToReturn = append(usersToReturn, u)
+			}
+		}
+	} else {
+		for _, u := range assignedUsers {
+			if u.Role != domain.RoleSuperAdmin {
+				usersToReturn = append(usersToReturn, u)
+			}
+		}
+	}
+
+	assignedMap := make(map[uuid.UUID]bool)
+	for _, u := range assignedUsers {
+		assignedMap[u.ID] = true
+	}
+
+	var resp []UserAccessResponse
+	for _, u := range usersToReturn {
+		resp = append(resp, UserAccessResponse{
+			UserID:    u.ID,
+			Name:      u.Name,
+			Email:     u.Email,
+			Image:     u.Image,
+			HasAccess: assignedMap[u.ID],
+		})
+	}
+
+	return resp, nil
+}
+
+func (s *appService) SearchUserForAccess(appID, requesterID uuid.UUID, searchQuery string) (*UserAccessResponse, error) {
+	app, err := s.appRepo.FindByID(appID)
+	if err != nil {
+		return nil, errors.New("aplikasi tidak ditemukan")
+	}
+
+	user, err := s.userRepo.FindByID(requesterID)
+	if err != nil {
+		return nil, errors.New("user tidak ditemukan")
+	}
+
+	if user.Role != domain.RoleSuperAdmin && app.OwnerID != requesterID {
+		return nil, errors.New("akses ditolak")
+	}
+
+	var foundUser *domain.User
+	// Cari berdasarkan UUID (User ID) saja
+	if parsedUUID, err := uuid.Parse(searchQuery); err == nil {
+		foundUser, _ = s.userRepo.FindByID(parsedUUID)
+	}
+
+	if foundUser == nil {
+		return nil, errors.New("user tidak ditemukan dengan ID tersebut")
+	}
+
+	// Jangan munculkan super admin
+	if foundUser.Role == domain.RoleSuperAdmin {
+		return nil, errors.New("user tidak ditemukan dengan ID tersebut")
+	}
+
+	// Pastikan user aktif dan terverifikasi
+	if !foundUser.IsActive || !foundUser.IsVerified {
+		return nil, errors.New("user tidak aktif atau belum memverifikasi email")
+	}
+
+	assignedUsers, err := s.appAccessRepo.GetAssignedUsers(appID)
+	if err != nil {
+		return nil, err
+	}
+
+	hasAccess := false
+	for _, u := range assignedUsers {
+		if u.ID == foundUser.ID {
+			hasAccess = true
+			break
+		}
+	}
+
+	return &UserAccessResponse{
+		UserID:    foundUser.ID,
+		Name:      foundUser.Name,
+		Email:     foundUser.Email,
+		Image:     foundUser.Image,
+		HasAccess: hasAccess,
+	}, nil
+}
+
+func (s *appService) UpdateAppAccessList(appID, requesterID uuid.UUID, userIDs []uuid.UUID) error {
+	app, err := s.appRepo.FindByID(appID)
+	if err != nil {
+		return errors.New("aplikasi tidak ditemukan")
+	}
+
+	user, err := s.userRepo.FindByID(requesterID)
+	if err != nil {
+		return errors.New("user tidak ditemukan")
+	}
+
+	if user.Role != domain.RoleSuperAdmin && app.OwnerID != requesterID {
+		return errors.New("akses ditolak")
+	}
+
+	return s.appAccessRepo.AssignUsers(appID, userIDs)
 }
 
 func (s *appService) RegenerateSecret(id uuid.UUID, ownerID uuid.UUID) (string, error) {
@@ -272,6 +431,9 @@ func (s *appService) AdminUpdate(id uuid.UUID, req *UpdateAppRequest) (*AppRespo
 	if req.LogoURL != "" {
 		app.LogoURL = req.LogoURL
 	}
+	if req.IsRestricted != nil {
+		app.IsRestricted = *req.IsRestricted
+	}
 
 	if err := s.appRepo.Update(app); err != nil {
 		return nil, errors.New("gagal update aplikasi")
@@ -317,6 +479,7 @@ func toAppResponse(app *domain.Application) AppResponse {
 		LogoURL:      app.LogoURL,
 		Status:       app.Status,
 		IsActive:     app.IsActive,
+		IsRestricted: app.IsRestricted,
 		OwnerID:      app.OwnerID,
 		CreatedAt:    app.CreatedAt,
 	}
