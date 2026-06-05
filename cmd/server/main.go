@@ -19,11 +19,7 @@ import (
 func main() {
 	// Load config
 	cfg := config.Load()
-	if len(cfg.EncryptionKey) >= 8 {
-		log.Printf("🔑 ACTIVE ENCRYPTION KEY: %s...%s (len: %d)", cfg.EncryptionKey[:4], cfg.EncryptionKey[len(cfg.EncryptionKey)-4:], len(cfg.EncryptionKey))
-	} else {
-		log.Printf("⚠️  ENCRYPTION KEY INVALID OR TOO SHORT: %s", cfg.EncryptionKey)
-	}
+
 
 	// Connect database
 	db := database.ConnectPostgres()
@@ -38,7 +34,7 @@ func main() {
 	); err != nil {
 		log.Fatalf("Migration failed: %v", err)
 	}
-	log.Println("✅ Migration completed")
+
 
 	// --- Dependency Injection ---
 	// Repositories
@@ -63,17 +59,18 @@ func main() {
 	// Seed superadmin pertama
 	if err := service.SeedSuperAdmin(userRepo); err != nil {
 		log.Printf("⚠️  Seed superadmin gagal: %v", err)
-	} else {
-		log.Println("✅ Superadmin ready")
 	}
 
 	// --- Echo Setup ---
 	e := echo.New()
-	e.HideBanner = true
+	e.HideBanner = false
 	e.Validator = middleware.NewValidator() // ← validasi input otomatis
 
 	// Global middleware
-	e.Use(echomiddleware.Logger())
+	e.Use(echomiddleware.LoggerWithConfig(echomiddleware.LoggerConfig{
+		Format: "⇨ [SSO] ${time_custom} | ${status} | ${latency_human} | ${remote_ip} | ${method} ${uri}\n",
+		CustomTimeFormat: "2006-01-02 15:04:05",
+	}))
 	e.Use(echomiddleware.Recover())
 	e.Use(echomiddleware.CORSWithConfig(echomiddleware.CORSConfig{
 		AllowOrigins: []string{"*"},
@@ -157,7 +154,9 @@ func main() {
 
 	// Start server
 	addr := fmt.Sprintf(":%s", cfg.AppPort)
-	log.Printf("🚀 %s running on %s", cfg.AppName, addr)
+	fmt.Println("\n==========================================")
+	fmt.Println("      RUNNING: SSO IPNU-IPPNU MAGETAN BE  ")
+	fmt.Println("==========================================")
 	if err := e.Start(addr); err != nil {
 		log.Fatalf("Server error: %v", err)
 	}

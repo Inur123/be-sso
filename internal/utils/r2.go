@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"log"
 
@@ -22,7 +23,7 @@ func getR2Client() (*s3.Client, error) {
 	}
 
 	cfgData := ssoConfig.Get()
-	if cfgData.R2AccessKeyID == "" || cfgData.R2SecretAccessKey == "" || cfgData.R2Endpoint == "" {
+	if cfgData.R2AccessKeyID == "" || cfgData.R2SecretAccessKey == "" || cfgData.R2AccountID == "" {
 		return nil, errors.New("Cloudflare R2 is not fully configured in env")
 	}
 
@@ -39,9 +40,13 @@ func getR2Client() (*s3.Client, error) {
 		return nil, err
 	}
 
-	// Create S3 client specifying custom base endpoint
+	// Construct endpoint URL dynamically from R2 Account ID
+	endpointURL := fmt.Sprintf("https://%s.r2.cloudflarestorage.com", cfgData.R2AccountID)
+
+	// Create S3 client specifying custom base endpoint and forcing path style
 	r2Client = s3.NewFromConfig(cfg, func(o *s3.Options) {
-		o.BaseEndpoint = aws.String(cfgData.R2Endpoint)
+		o.BaseEndpoint = aws.String(endpointURL)
+		o.UsePathStyle = true
 	})
 
 	return r2Client, nil
@@ -56,7 +61,7 @@ func UploadToR2(ctx context.Context, key string, data []byte, contentType string
 
 	cfgData := ssoConfig.Get()
 	_, err = client.PutObject(ctx, &s3.PutObjectInput{
-		Bucket:      aws.String(cfgData.R2Bucket),
+		Bucket:      aws.String(cfgData.R2BucketName),
 		Key:         aws.String(key),
 		Body:        bytes.NewReader(data),
 		ContentType: aws.String(contentType),
@@ -78,7 +83,7 @@ func GetFromR2(ctx context.Context, key string) ([]byte, error) {
 
 	cfgData := ssoConfig.Get()
 	resp, err := client.GetObject(ctx, &s3.GetObjectInput{
-		Bucket: aws.String(cfgData.R2Bucket),
+		Bucket: aws.String(cfgData.R2BucketName),
 		Key:    aws.String(key),
 	})
 	if err != nil {
@@ -104,7 +109,7 @@ func DeleteFromR2(ctx context.Context, key string) error {
 
 	cfgData := ssoConfig.Get()
 	_, err = client.DeleteObject(ctx, &s3.DeleteObjectInput{
-		Bucket: aws.String(cfgData.R2Bucket),
+		Bucket: aws.String(cfgData.R2BucketName),
 		Key:    aws.String(key),
 	})
 	if err != nil {

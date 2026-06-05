@@ -73,33 +73,23 @@ func (u *User) encryptFields() error {
 func (u *User) decryptFields() error {
 	key := config.Get().EncryptionKey
 
-	println("DEBUG DECRYPT: u.Name before:", u.Name)
 	decName, errName := utils.DecryptField(u.Name, key)
-	if errName != nil {
-		println("❌ DECRYPT NAME FAILED for email:", u.Email, "err:", errName.Error(), "val:", u.Name)
-	} else {
+	if errName == nil {
 		u.Name = decName
-		println("DEBUG DECRYPT: u.Name after:", u.Name)
 	}
 
 	decPhone, errPhone := utils.DecryptField(u.Phone, key)
-	if errPhone != nil {
-		println("❌ DECRYPT PHONE FAILED:", errPhone.Error())
-	} else {
+	if errPhone == nil {
 		u.Phone = decPhone
 	}
 
 	decGender, errGender := utils.DecryptField(u.Gender, key)
-	if errGender != nil {
-		println("❌ DECRYPT GENDER FAILED:", errGender.Error())
-	} else {
+	if errGender == nil {
 		u.Gender = decGender
 	}
 
 	decImage, errImage := utils.DecryptField(u.Image, key)
-	if errImage != nil {
-		println("❌ DECRYPT IMAGE FAILED:", errImage.Error())
-	} else {
+	if errImage == nil {
 		u.Image = decImage
 	}
 

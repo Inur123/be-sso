@@ -45,8 +45,8 @@ type Config struct {
 	// Cloudflare R2
 	R2AccessKeyID     string
 	R2SecretAccessKey string
-	R2Endpoint        string
-	R2Bucket          string
+	R2AccountID       string
+	R2BucketName      string
 }
 
 var cfg *Config
@@ -89,8 +89,8 @@ func Load() *Config {
 
 		R2AccessKeyID:     getEnv("R2_ACCESS_KEY_ID", ""),
 		R2SecretAccessKey: getEnv("R2_SECRET_ACCESS_KEY", ""),
-		R2Endpoint:        getEnv("R2_ENDPOINT", ""),
-		R2Bucket:          getEnv("R2_BUCKET", ""),
+		R2AccountID:       getEnv("R2_ACCOUNT_ID", ""),
+		R2BucketName:      getEnv("R2_BUCKET_NAME", ""),
 	}
 
 	return cfg
