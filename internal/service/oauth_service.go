@@ -294,10 +294,21 @@ func (s *oauthService) RefreshAccessToken(req *RefreshRequest) (*TokenResponse, 
 	}, nil
 }
 
-// RevokeToken — hapus session berdasarkan refresh_token
+// RevokeToken — hapus SEMUA session user untuk app tertentu berdasarkan refresh_token
 func (s *oauthService) RevokeToken(token string) error {
-	if err := s.sessionRepo.DeleteByRefreshToken(token); err != nil {
+	// Cari session dulu untuk dapat user_id dan app_id
+	sess, err := s.sessionRepo.FindByRefreshToken(token)
+	if err != nil {
 		return errors.New("token tidak ditemukan")
+	}
+
+	// Hapus SEMUA sesi untuk user + app ini (bukan hanya 1),
+	// agar sesi lama tidak muncul kembali setelah revoke
+	if sess.AppID != nil {
+		_ = s.sessionRepo.DeleteByUserAndApp(sess.UserID, *sess.AppID)
+	} else {
+		// Fallback: hapus hanya token ini jika tidak ada app_id
+		_ = s.sessionRepo.DeleteByRefreshToken(token)
 	}
 	return nil
 }
