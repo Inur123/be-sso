@@ -4,7 +4,6 @@ import (
 	"crypto/sha256"
 	"fmt"
 	"io"
-	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -260,14 +259,10 @@ func (h *AuthHandler) UploadAvatar(c echo.Context) error {
 		return utils.InternalError(c, "Gagal mengenkripsi file")
 	}
 
-	uploadDir := "uploads/avatars"
-	if err := os.MkdirAll(uploadDir, 0755); err != nil {
-		return utils.InternalError(c, "Gagal membuat direktori")
-	}
-
-	destPath := filepath.Join(uploadDir, hashedName)
-	if err := os.WriteFile(destPath, encrypted, 0644); err != nil {
-		return utils.InternalError(c, "Gagal menyimpan file")
+	// Upload to R2 instead of local file
+	r2Key := "avatars/" + hashedName
+	if err := utils.UploadToR2(c.Request().Context(), r2Key, encrypted, "application/octet-stream"); err != nil {
+		return utils.InternalError(c, "Gagal menyimpan file ke R2")
 	}
 
 	// Hapus foto lama
@@ -275,9 +270,8 @@ func (h *AuthHandler) UploadAvatar(c echo.Context) error {
 	if currentUser != nil && currentUser.Image != "" {
 		// extract hash dari URL lama: /v1/avatar/<hash>
 		oldHash := filepath.Base(currentUser.Image)
-		oldPath := filepath.Join(uploadDir, oldHash)
-		if oldPath != destPath {
-			_ = os.Remove(oldPath)
+		if oldHash != hashedName {
+			_ = utils.DeleteFromR2(c.Request().Context(), "avatars/"+oldHash)
 		}
 	}
 
@@ -306,8 +300,8 @@ func (h *AuthHandler) ServeAvatar(c echo.Context) error {
 		return utils.NotFound(c, "Avatar tidak ditemukan")
 	}
 
-	filePath := filepath.Join("uploads/avatars", filepath.Base(hash))
-	encrypted, err := os.ReadFile(filePath)
+	r2Key := "avatars/" + filepath.Base(hash)
+	encrypted, err := utils.GetFromR2(c.Request().Context(), r2Key)
 	if err != nil {
 		return utils.NotFound(c, "Avatar tidak ditemukan")
 	}

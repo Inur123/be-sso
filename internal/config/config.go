@@ -41,6 +41,12 @@ type Config struct {
 	SMTPPort     int
 	SMTPEmail    string
 	SMTPPassword string
+
+	// Cloudflare R2
+	R2AccessKeyID     string
+	R2SecretAccessKey string
+	R2Endpoint        string
+	R2Bucket          string
 }
 
 var cfg *Config
@@ -80,6 +86,11 @@ func Load() *Config {
 		SMTPPort:     func() int { p, _ := strconv.Atoi(getEnv("SMTP_PORT", "587")); return p }(),
 		SMTPEmail:    getEnv("SMTP_EMAIL", ""),
 		SMTPPassword: getEnv("SMTP_PASSWORD", ""), // App Password Google
+
+		R2AccessKeyID:     getEnv("R2_ACCESS_KEY_ID", ""),
+		R2SecretAccessKey: getEnv("R2_SECRET_ACCESS_KEY", ""),
+		R2Endpoint:        getEnv("R2_ENDPOINT", ""),
+		R2Bucket:          getEnv("R2_BUCKET", ""),
 	}
 
 	return cfg
