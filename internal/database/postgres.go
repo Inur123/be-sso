@@ -16,14 +16,25 @@ var DB *gorm.DB
 func ConnectPostgres() *gorm.DB {
 	cfg := config.Get()
 
-	dsn := fmt.Sprintf(
-		"host=%s user=%s password=%s dbname=%s port=%s sslmode=disable TimeZone=Asia/Jakarta",
-		cfg.DBHost,
-		cfg.DBUser,
-		cfg.DBPassword,
-		cfg.DBName,
-		cfg.DBPort,
-	)
+	var dsn string
+	if cfg.DBPassword != "" {
+		dsn = fmt.Sprintf(
+			"postgres://%s:%s@%s:%s/%s?sslmode=disable&TimeZone=Asia/Jakarta",
+			cfg.DBUser,
+			cfg.DBPassword,
+			cfg.DBHost,
+			cfg.DBPort,
+			cfg.DBName,
+		)
+	} else {
+		dsn = fmt.Sprintf(
+			"postgres://%s@%s:%s/%s?sslmode=disable&TimeZone=Asia/Jakarta",
+			cfg.DBUser,
+			cfg.DBHost,
+			cfg.DBPort,
+			cfg.DBName,
+		)
+	}
 
 	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{
 		Logger: logger.Default.LogMode(logger.Silent),
